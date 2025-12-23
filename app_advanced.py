@@ -71,12 +71,12 @@ def dashboard_page():
     with col1:
         st.markdown("### 🎯 Quick Links")
         st.markdown("""
-        1. **[Black-Scholes](#)**
+        1. **Black-Scholes**
            - Price European options
            - Calculate Greeks
            - Analyze any underlying
         
-        2. **[Efficient Frontier](#)**
+        2. **Efficient Frontier**
            - Optimize multi-asset portfolios
            - Visualize risk-return tradeoff
            - Find optimal allocations
@@ -85,12 +85,12 @@ def dashboard_page():
     with col2:
         st.markdown("### 🚀 Features")
         st.markdown("""
-        3. **[Monte Carlo](#)**
+        3. **Monte Carlo**
            - Simulate price paths
            - Value-at-Risk analysis
            - Scenario analysis
         
-        4. **[Backtest](#)**
+        4. **Backtest**
            - Test strategies historically
            - Performance metrics
            - Risk analysis
@@ -368,34 +368,58 @@ def monte_carlo_page():
     with col1:
         st.subheader("Simulation Setup")
         
-        ticker = st.text_input("Stock Ticker", value="AAPL", key="mc_ticker").upper()
+        # Multi-stock support
+        tickers_input = st.text_area("Stock Tickers (one per line)", value="AAPL\nMSFT", height=80, key="mc_tickers")
+        tickers = [t.strip().upper() for t in tickers_input.split('\n') if t.strip()]
         
-        with st.spinner(f"Fetching {ticker} data..."):
+        if len(tickers) == 0:
+            st.error("Please enter at least one stock ticker")
+            return
+        
+        # Get data for all stocks
+        stock_data = {}
+        prices = []
+        vols = []
+        
+        for ticker in tickers:
             try:
                 stock_info = get_stock_info(ticker)
-                current_price = stock_info['current_price']
-                estimated_vol = stock_info['volatility']
+                stock_data[ticker] = stock_info
+                prices.append(stock_info['current_price'])
+                vols.append(stock_info['volatility'])
             except:
-                current_price = 100
-                estimated_vol = 0.25
+                stock_data[ticker] = {'current_price': 100, 'volatility': 0.25}
+                prices.append(100)
+                vols.append(0.25)
         
-        S0 = st.number_input("Current Price", value=float(current_price), min_value=0.01, step=1.0, key="mc_s0")
-        mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu")
-        sigma = st.slider("Volatility", 0.05, 1.0, float(estimated_vol), step=0.05, key="mc_sigma")
+        if len(tickers) == 1:
+            S0 = st.number_input("Current Price", value=float(prices[0]), min_value=0.01, step=1.0, key="mc_s0")
+            mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu")
+            sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma")
+        else:
+            st.info(f"📊 Simulating {len(tickers)} stocks jointly")
+            mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu")
+            sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma")
+            
         T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t")
         n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims")
         
         if st.button("Run Simulation", key="mc_run", use_container_width=True):
             with st.spinner("Running simulations..."):
-                S = MonteCarloSimulator.simulate_prices(S0, mu, sigma, T, n_sims)
+                if len(tickers) == 1:
+                    S = MonteCarloSimulator.simulate_prices(prices[0], mu, sigma, T, n_sims)
+                else:
+                    # For multiple stocks, simulate correlated returns
+                    S = MonteCarloSimulator.simulate_prices(None, mu, sigma, T, n_sims, n_assets=len(tickers), prices=prices)
                 
                 st.session_state['mc_S'] = S
                 st.session_state['mc_params'] = {
-                    'ticker': ticker, 'S0': S0, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims
+                    'tickers': tickers, 'prices': prices, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims, 'n_assets': len(tickers)
                 }
                 
                 st.success("✓ Complete!")
     
+
     with col2:
         if 'mc_S' in st.session_state:
             S = st.session_state['mc_S']
@@ -436,7 +460,7 @@ def monte_carlo_page():
             ))
             
             fig.update_layout(
-                title=f"{params['ticker']} - {params['n']:,} Simulation Paths",
+                title=f"{', '.join(params['tickers'])} - {params['n']:,} Simulation Paths",
                 xaxis_title="Trading Days",
                 yaxis_title="Price ($)",
                 height=600
