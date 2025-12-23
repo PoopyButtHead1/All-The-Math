@@ -510,21 +510,40 @@ def backtest_page():
             total = sum(weights)
             weights = [w / total for w in weights] if total > 0 else [1/len(stocks)] * len(stocks)
         
-        # Backtest period
-        lookback_years = st.slider("Period (years)", 1, 30, 3, key="bt_period")
+        # Backtest period with date inputs
+        st.markdown("### Date Range")
+        date_col1, date_col2 = st.columns(2)
+        
+        with date_col1:
+            start_date = st.date_input(
+                "Start Date",
+                value=datetime.now() - timedelta(days=3*365),
+                key="bt_start_date"
+            )
+        
+        with date_col2:
+            end_date = st.date_input(
+                "End Date",
+                value=datetime.now(),
+                key="bt_end_date"
+            )
+        
         initial_cap = st.number_input("Initial Capital", 10000, 10000000, 100000, step=10000, key="bt_cap")
         
         if st.button("▶️ Run Backtest", key="bt_run", use_container_width=True):
             if len(stocks) < 1:
                 st.error("Enter at least 1 stock")
+            elif start_date >= end_date:
+                st.error("Start date must be before end date")
             else:
                 with st.spinner("Running backtest..."):
                     try:
-                        end_date = datetime.now()
-                        start_date = end_date - timedelta(days=lookback_years*365)
+                        # Convert dates to datetime
+                        start_date_dt = datetime.combine(start_date, datetime.min.time())
+                        end_date_dt = datetime.combine(end_date, datetime.min.time())
                         
                         results = BacktestEngine.backtest_portfolio(
-                            stocks, weights, start_date, end_date, initial_cap
+                            stocks, weights, start_date_dt, end_date_dt, initial_cap
                         )
                         
                         st.session_state['bt_results'] = results
