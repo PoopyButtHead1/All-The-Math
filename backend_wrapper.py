@@ -148,6 +148,54 @@ class MonteCarloSimulator:
         return S
     
     @staticmethod
+    @staticmethod
+    def simulate_prices_multi(S0_list, mu, sigma, T, n_sims, n_days=None, correlation_matrix=None):
+        """
+        Simulate multiple stock prices using geometric Brownian motion with correlation
+        
+        Args:
+            S0_list: List of initial prices for each asset
+            mu: Expected return (portfolio level)
+            sigma: Volatility (portfolio level)
+            T: Time horizon (years)
+            n_sims: Number of simulations
+            n_days: Number of trading days (if None, uses 252*T)
+            correlation_matrix: Correlation matrix between assets (if None, assumes independent)
+        
+        Returns:
+            Array of shape (n_days, n_sims, n_assets) with simulated prices
+        """
+        if n_days is None:
+            n_days = int(T * 252)
+        
+        n_assets = len(S0_list)
+        dt = 1 / 252
+        S = np.zeros((n_days, n_sims, n_assets))
+        
+        # Initialize first day with starting prices
+        for j in range(n_assets):
+            S[0, :, j] = S0_list[j]
+        
+        # Default to independent if no correlation provided
+        if correlation_matrix is None:
+            correlation_matrix = np.eye(n_assets)
+        
+        # Cholesky decomposition for correlated returns
+        L = np.linalg.cholesky(correlation_matrix)
+        
+        # Simulate prices
+        for t in range(1, n_days):
+            # Generate correlated random numbers
+            Z = np.random.standard_normal((n_sims, n_assets))
+            Z_corr = Z @ L.T
+            
+            for j in range(n_assets):
+                S[t, :, j] = S[t-1, :, j] * np.exp(
+                    (mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z_corr[:, j]
+                )
+        
+        return S
+
     def calculate_var(prices, confidence=0.95):
         """Calculate Value-at-Risk"""
         return np.percentile(prices, (1 - confidence) * 100)

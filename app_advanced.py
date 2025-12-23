@@ -410,7 +410,7 @@ def monte_carlo_page():
                     S = MonteCarloSimulator.simulate_prices(prices[0], mu, sigma, T, n_sims)
                 else:
                     # For multiple stocks, simulate correlated returns
-                    S = MonteCarloSimulator.simulate_prices(None, mu, sigma, T, n_sims, n_assets=len(tickers), prices=prices)
+                    S = MonteCarloSimulator.simulate_prices_multi(prices, mu, sigma, T, n_sims)
                 
                 st.session_state['mc_S'] = S
                 st.session_state['mc_params'] = {
@@ -425,6 +425,20 @@ def monte_carlo_page():
             S = st.session_state['mc_S']
             params = st.session_state['mc_params']
             
+
+            # Determine if single or multi-asset
+            n_assets = params.get('n_assets', 1)
+            
+            # Convert to proper shape if needed
+            if len(S.shape) == 2:
+                # Single asset: (n_days, n_sims)
+                is_multi = False
+                S_display = S
+            else:
+                # Multi-asset: (n_days, n_sims, n_assets)
+                is_multi = True
+                S_display = S[:, :, 0]  # Display first asset by default
+            
             # Plot price paths
             fig = go.Figure()
             
@@ -432,7 +446,7 @@ def monte_carlo_page():
             sample_n = min(100, params['n'])
             for i in range(sample_n):
                 fig.add_trace(go.Scatter(
-                    y=S[:, i],
+                    y=S_display[:, i],
                     mode='lines',
                     opacity=0.1,
                     line=dict(color='blue'),
@@ -441,7 +455,7 @@ def monte_carlo_page():
                 ))
             
             # Percentiles
-            percentiles_data = np.percentile(S, [5, 25, 50, 75, 95], axis=1)
+            percentiles_data = np.percentile(S_display, [5, 25, 50, 75, 95], axis=1)
             
             fig.add_trace(go.Scatter(
                 y=percentiles_data[2, :],
@@ -459,8 +473,14 @@ def monte_carlo_page():
                 line=dict(color='orange', dash='dash')
             ))
             
+            # Build title
+            if is_multi:
+                title = f"{params['tickers'][0]} (Portfolio) - {params['n']:,} Simulation Paths"
+            else:
+                title = f"{params['tickers'][0]} - {params['n']:,} Simulation Paths"
+            
             fig.update_layout(
-                title=f"{', '.join(params['tickers'])} - {params['n']:,} Simulation Paths",
+                title=title,
                 xaxis_title="Trading Days",
                 yaxis_title="Price ($)",
                 height=600
@@ -470,7 +490,8 @@ def monte_carlo_page():
             
             # Final price stats
             st.markdown("### Terminal Price Distribution")
-            final_prices = S[-1, :]
+            final_prices = S_display[-1, :]
+
             
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             with col_f1:
