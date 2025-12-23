@@ -338,11 +338,19 @@ def efficient_frontier_page():
                 opt_weights = np.random.random(len(stocks))
                 opt_weights /= opt_weights.sum()
                 
-                weight_df = pd.DataFrame({
-                    'Stock': stocks,
-                    'Weight': [f"{w:.2%}" for w in opt_weights],
-                    'Return': [f"{r:.2%}" for r in st.session_state['ef_mean_returns']],
-                })
+                # Get mean returns if available, otherwise calculate on the fly
+                if 'ef_mean_returns' in st.session_state:
+                    mean_returns = st.session_state['ef_mean_returns']
+                    weight_df = pd.DataFrame({
+                        'Stock': stocks,
+                        'Weight': [f"{w:.2%}" for w in opt_weights],
+                        'Return': [f"{r:.2%}" for r in mean_returns],
+                    })
+                else:
+                    weight_df = pd.DataFrame({
+                        'Stock': stocks,
+                        'Weight': [f"{w:.2%}" for w in opt_weights],
+                    })
                 st.table(weight_df)
         else:
             st.info("👈 Configure portfolio and calculate frontier")
