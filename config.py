@@ -1,0 +1,60 @@
+"""
+Configuration file for Financial Analysis Suite
+"""
+
+# Application Settings
+APP_NAME = "Financial Analysis Suite"
+APP_VERSION = "1.0"
+
+# Financial Settings
+DEFAULT_RISK_FREE_RATE = 0.03
+DEFAULT_LOOKBACK_DAYS = 252  # 1 year
+DEFAULT_INITIAL_CAPITAL = 100000
+DEFAULT_NUM_SIMULATIONS = 1000
+DEFAULT_NUM_PORTFOLIOS = 5000
+
+# UI Settings
+COLOR_PRIMARY = "#1f77b4"
+COLOR_SUCCESS = "#2ca02c"
+COLOR_WARNING = "#ff7f0e"
+COLOR_DANGER = "#d62728"
+
+# Data Settings
+CACHE_ENABLED = True
+CACHE_DIR = "data_cache"
+DATA_SOURCE = "Yahoo Finance"
+
+# Monte Carlo Settings
+MC_MAX_PATHS = 10000
+MC_MIN_PATHS = 100
+MC_DEFAULT_DAYS = 252
+
+# Backtest Settings
+BACKTEST_MIN_YEARS = 1
+BACKTEST_MAX_YEARS = 30
+BACKTEST_DEFAULT_YEARS = 3
+
+# Black-Scholes Settings
+BS_MIN_DAYS = 1
+BS_MAX_DAYS = 10 * 365
+BS_DEFAULT_DAYS = 365
+
+# Efficient Frontier Settings
+EF_MIN_STOCKS = 2
+EF_MAX_STOCKS = 50
+EF_MIN_PORTFOLIOS = 100
+EF_MAX_PORTFOLIOS = 50000
+
+# Stock Data Settings
+STOCK_MIN_PRICE = 0.01
+STOCK_MAX_PRICE = 100000
+
+# Volatility Settings
+VOLATILITY_MIN = 0.05
+VOLATILITY_MAX = 1.0
+VOLATILITY_DEFAULT = 0.25
+
+# Return Settings
+RETURN_MIN = -0.5
+RETURN_MAX = 1.0
+RETURN_DEFAULT = 0.10
