@@ -265,7 +265,6 @@ def efficient_frontier_page():
                         )
                         
                         st.session_state['ef_results'] = results
-                        st.session_state['ef_stocks'] = stocks
                         st.session_state['ef_mean_returns'] = mean_returns
                         st.session_state['ef_cov'] = cov_matrix
                         
@@ -276,7 +275,9 @@ def efficient_frontier_page():
     with col2:
         if 'ef_results' in st.session_state:
             results = st.session_state['ef_results']
-            stocks = st.session_state['ef_stocks']
+            # Recalculate stocks from the current widget value (don't store in session state)
+            stocks_text = st.session_state.get('ef_stocks', '')
+            stocks = [s.strip().upper() for s in stocks_text.split('\n') if s.strip()]
             
             # Interactive scatter plot
             fig = go.Figure(data=go.Scatter(
