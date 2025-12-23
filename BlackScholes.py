@@ -1,4 +1,5 @@
 #implementing the black-scholes formula in python
+#C=SN(d1​)(−Ke^−rT)N(d2​)
 
 import numpy as np 
 from scipy.stats import norm
