@@ -189,22 +189,8 @@ def black_scholes_page():
                 st.metric("Γ Gamma", f"{greeks['gamma']:.6f}",
                          help="Rate of change of Delta")
             with col_g3:
-                # Determine a baseline current price to compute probability of loss
-                baseline_price = None
-                # Prefer explicit 'S0' if present (older single-stock flows),
-                # otherwise use the first price from the stored prices list.
-                if params.get('n_assets', 1) == 1:
-                    baseline_price = params.get('S0') if params.get('S0') is not None else (params.get('prices', [None])[0] if params.get('prices') else None)
-                else:
-                    # For multi-asset simulations, default to the first asset's
-                    # starting price for the displayed asset comparison.
-                    baseline_price = (params.get('prices', [None])[0] if params.get('prices') else None)
-
-                if baseline_price is None:
-                    st.metric("Prob(Loss)", "N/A")
-                else:
-                    prob_loss = (final_prices < baseline_price).sum() / len(final_prices)
-                    st.metric("Prob(Loss)", f"{prob_loss:.2%}")
+                st.metric("ρ Rho", f"{greeks['rho']:.4f}",
+                         help="Sensitivity to 1% interest rate change")
             with col_g4:
                 st.metric("ν Vega", f"{greeks['vega']:.4f}",
                          help="Sensitivity to 1% volatility change")
@@ -332,8 +318,10 @@ def efficient_frontier_page():
                 title=f"Efficient Frontier - {len(stocks)} Assets",
                 xaxis_title="Risk (σ)",
                 yaxis_title="Return (μ)",
-                height=700,
-                hovermode='closest'
+                height=800,
+                hovermode='closest',
+                margin=dict(l=80, r=80, t=100, b=80),
+                yaxis=dict(tickformat='.2%')
             )
             
             st.plotly_chart(fig, use_container_width=True)
