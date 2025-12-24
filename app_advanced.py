@@ -402,12 +402,12 @@ def monte_carlo_page():
                 vols.append(0.25)
         
         if len(tickers) == 1:
-            mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu")
-            sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma")
+            mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu_single")
+            sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma_single")
         else:
             st.info(f"📊 Simulating {len(tickers)} stocks jointly")
-            mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu")
-            sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma")
+            mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu_multi")
+            sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma_multi")
             
             st.markdown("#### Override Current Prices (optional)")
             price_cols = st.columns(2)
@@ -419,8 +419,8 @@ def monte_carlo_page():
                     overridden.append(val)
             prices = overridden
             
-        T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t")
-        n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims")
+        T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t_input")
+        n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims_slider")
         
         if st.button("Run Simulation", key="mc_run", use_container_width=True):
             with st.spinner("Running simulations..."):
