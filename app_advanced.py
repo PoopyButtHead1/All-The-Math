@@ -382,7 +382,6 @@ def monte_carlo_page():
     with col1:
         st.subheader("Simulation Setup")
         
-        # Multi-stock support
         tickers_input = st.text_area("Stock Tickers (one per line)", value="AAPL\nMSFT", height=80, key="mc_tickers")
         tickers = [t.strip().upper() for t in tickers_input.split('\n') if t.strip()]
         
@@ -390,30 +389,35 @@ def monte_carlo_page():
             st.error("Please enter at least one stock ticker")
             return
         
-        # Get data for all stocks
-        stock_data = {}
         prices = []
         vols = []
         
         for ticker in tickers:
             try:
                 stock_info = get_stock_info(ticker)
-                stock_data[ticker] = stock_info
                 prices.append(stock_info['current_price'])
                 vols.append(stock_info['volatility'])
             except:
-                stock_data[ticker] = {'current_price': 100, 'volatility': 0.25}
                 prices.append(100)
                 vols.append(0.25)
         
         if len(tickers) == 1:
-            S0 = st.number_input("Current Price", value=float(prices[0]), min_value=0.01, step=1.0, key="mc_s0")
             mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu")
             sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma")
         else:
             st.info(f"📊 Simulating {len(tickers)} stocks jointly")
             mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu")
             sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma")
+            
+            st.markdown("#### Override Current Prices (optional)")
+            price_cols = st.columns(2)
+            overridden = []
+            for i, t in enumerate(tickers):
+                col = price_cols[i % 2]
+                with col:
+                    val = st.number_input(f"Current Price - {t}", value=float(prices[i]), min_value=0.01, step=0.01, key=f"mc_s0_{t}")
+                    overridden.append(val)
+            prices = overridden
             
         T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t")
         n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims")
@@ -423,68 +427,40 @@ def monte_carlo_page():
                 if len(tickers) == 1:
                     S = MonteCarloSimulator.simulate_prices(prices[0], mu, sigma, T, n_sims)
                 else:
-                    # For multiple stocks, simulate correlated returns
                     S = MonteCarloSimulator.simulate_prices_multi(prices, mu, sigma, T, n_sims)
-                
+
                 st.session_state['mc_S'] = S
-                st.session_state['mc_params'] = {
-                    'tickers': tickers, 'prices': prices, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims, 'n_assets': len(tickers)
-                }
-                
+                params = {'tickers': tickers, 'prices': prices, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims, 'n_assets': len(tickers)}
+                if len(tickers) == 1:
+                    params['S0'] = prices[0]
+                st.session_state['mc_params'] = params
                 st.success("✓ Complete!")
     
-
     with col2:
         if 'mc_S' in st.session_state:
             S = st.session_state['mc_S']
             params = st.session_state['mc_params']
             
-
-            # Determine if single or multi-asset
-            n_assets = params.get('n_assets', 1)
-            
-            # Convert to proper shape if needed
-            if len(tickers) == 1:
-                S0 = st.number_input("Current Price", value=float(prices[0]), min_value=0.01, step=1.0, key="mc_s0")
-                mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu")
-                sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma")
+            if len(S.shape) == 2:
+                is_multi = False
+                S_display = S
             else:
-                st.info(f"📊 Simulating {len(tickers)} stocks jointly")
-                mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu")
-                sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma")
-
-            # Allow optional overrides for current prices per ticker (multi-asset)
-            if len(tickers) > 1:
-                st.markdown("#### Override Current Prices (optional)")
-                price_cols = st.columns(2)
-                overridden = []
-                for i, t in enumerate(tickers):
-                    col = price_cols[i % 2]
-                    with col:
-                        val = st.number_input(f"Current Price - {t}", value=float(prices[i]), min_value=0.01, step=0.01, key=f"mc_s0_{t}")
-                        overridden.append(val)
-                prices = overridden
-
-            T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t")
-            n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims")
-
-            if st.button("Run Simulation", key="mc_run", use_container_width=True):
-                with st.spinner("Running simulations..."):
-                    if len(tickers) == 1:
-                        # single asset
-                        S = MonteCarloSimulator.simulate_prices(prices[0], mu, sigma, T, n_sims)
-                    else:
-                        # For multiple stocks, simulate correlated returns
-                        S = MonteCarloSimulator.simulate_prices_multi(prices, mu, sigma, T, n_sims)
-
-                    st.session_state['mc_S'] = S
-                    # Store params; include explicit S0 for single-asset flows
-                    params = {'tickers': tickers, 'prices': prices, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims, 'n_assets': len(tickers)}
-                    if len(tickers) == 1:
-                        params['S0'] = prices[0]
-                    st.session_state['mc_params'] = params
-
-                    st.success("✓ Complete!")
+                is_multi = True
+                S_display = S[:, :, 0]
+            
+            fig = go.Figure()
+            sample_n = min(100, params['n'])
+            for i in range(sample_n):
+                fig.add_trace(go.Scatter(
+                    y=S_display[:, i],
+                    mode='lines',
+                    opacity=0.1,
+                    line=dict(color='blue'),
+                    showlegend=False,
+                    hoverinfo='skip'
+                ))
+            
+            percentiles_data = np.percentile(S_display, [5, 25, 50, 75, 95], axis=1)
             
             fig.add_trace(go.Scatter(
                 y=percentiles_data[2, :],
@@ -502,11 +478,8 @@ def monte_carlo_page():
                 line=dict(color='orange', dash='dash')
             ))
             
-            # Build title
-            if is_multi:
-                title = f"{params['tickers'][0]} (Portfolio) - {params['n']:,} Simulation Paths"
-            else:
-                title = f"{params['tickers'][0]} - {params['n']:,} Simulation Paths"
+            title = f"{params['tickers'][0]} (Portfolio)" if is_multi else params['tickers'][0]
+            title += f" - {params['n']:,} Simulation Paths"
             
             fig.update_layout(
                 title=title,
@@ -517,10 +490,8 @@ def monte_carlo_page():
             
             st.plotly_chart(fig, use_container_width=True)
             
-            # Final price stats
             st.markdown("### Terminal Price Distribution")
             final_prices = S_display[-1, :]
-
             
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             with col_f1:
@@ -532,7 +503,6 @@ def monte_carlo_page():
             with col_f4:
                 st.metric("Max", f"${final_prices.max():.2f}")
             
-            # Risk metrics
             st.markdown("### Risk Analysis")
             col_r1, col_r2, col_r3 = st.columns(3)
             with col_r1:
@@ -542,10 +512,13 @@ def monte_carlo_page():
                 cvar_95 = MonteCarloSimulator.calculate_cvar(final_prices, 0.95)
                 st.metric("CVaR (95%)", f"${cvar_95:.2f}")
             with col_r3:
-                prob_loss = (final_prices < params['S0']).sum() / len(final_prices)
-                st.metric("Prob(Loss)", f"{prob_loss:.2%}")
+                baseline_price = params.get('S0') if params.get('S0') is not None else (params.get('prices', [None])[0] if params.get('prices') else None)
+                if baseline_price is None:
+                    st.metric("Prob(Loss)", "N/A")
+                else:
+                    prob_loss = (final_prices < baseline_price).sum() / len(final_prices)
+                    st.metric("Prob(Loss)", f"{prob_loss:.2%}")
             
-            # Distribution histogram
             fig_hist = px.histogram(
                 x=final_prices,
                 nbins=50,
@@ -558,9 +531,6 @@ def monte_carlo_page():
             st.info("👈 Configure and run simulation")
 
 
-# ============================================================
-# Backtest Page
-# ============================================================
 def backtest_page():
     st.title("📉 Portfolio Backtest Engine")
     
