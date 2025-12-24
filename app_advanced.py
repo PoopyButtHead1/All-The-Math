@@ -180,20 +180,25 @@ def black_scholes_page():
             
             # Greeks
             st.markdown("### Greeks")
-            col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+            col_g1, col_g2, col_g3 = st.columns(3)
             
             with col_g1:
                 st.metric("Δ Delta", f"{greeks['delta']:.4f}", 
-                         help="Price sensitivity to 1% stock price change")
+                         help="Price sensitivity to $1 stock price change")
             with col_g2:
                 st.metric("Γ Gamma", f"{greeks['gamma']:.6f}",
                          help="Rate of change of Delta")
             with col_g3:
-                st.metric("ρ Rho", f"{greeks['rho']:.4f}",
-                         help="Sensitivity to 1% interest rate change")
+                st.metric("Θ Theta", f"{greeks['theta']:.4f}",
+                         help="Time decay per day")
+            
+            col_g4, col_g5 = st.columns(2)
             with col_g4:
                 st.metric("ν Vega", f"{greeks['vega']:.4f}",
                          help="Sensitivity to 1% volatility change")
+            with col_g5:
+                st.metric("ρ Rho", f"{greeks['rho']:.4f}",
+                         help="Sensitivity to 1% interest rate change")
             
             # Summary table
             st.markdown("### Summary")
