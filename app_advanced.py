@@ -189,8 +189,22 @@ def black_scholes_page():
                 st.metric("Γ Gamma", f"{greeks['gamma']:.6f}",
                          help="Rate of change of Delta")
             with col_g3:
-                st.metric("Θ Theta", f"{greeks['theta']:.4f}",
-                         help="Daily time decay")
+                # Determine a baseline current price to compute probability of loss
+                baseline_price = None
+                # Prefer explicit 'S0' if present (older single-stock flows),
+                # otherwise use the first price from the stored prices list.
+                if params.get('n_assets', 1) == 1:
+                    baseline_price = params.get('S0') if params.get('S0') is not None else (params.get('prices', [None])[0] if params.get('prices') else None)
+                else:
+                    # For multi-asset simulations, default to the first asset's
+                    # starting price for the displayed asset comparison.
+                    baseline_price = (params.get('prices', [None])[0] if params.get('prices') else None)
+
+                if baseline_price is None:
+                    st.metric("Prob(Loss)", "N/A")
+                else:
+                    prob_loss = (final_prices < baseline_price).sum() / len(final_prices)
+                    st.metric("Prob(Loss)", f"{prob_loss:.2%}")
             with col_g4:
                 st.metric("ν Vega", f"{greeks['vega']:.4f}",
                          help="Sensitivity to 1% volatility change")
@@ -430,32 +444,47 @@ def monte_carlo_page():
             n_assets = params.get('n_assets', 1)
             
             # Convert to proper shape if needed
-            if len(S.shape) == 2:
-                # Single asset: (n_days, n_sims)
-                is_multi = False
-                S_display = S
+            if len(tickers) == 1:
+                S0 = st.number_input("Current Price", value=float(prices[0]), min_value=0.01, step=1.0, key="mc_s0")
+                mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu")
+                sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma")
             else:
-                # Multi-asset: (n_days, n_sims, n_assets)
-                is_multi = True
-                S_display = S[:, :, 0]  # Display first asset by default
-            
-            # Plot price paths
-            fig = go.Figure()
-            
-            # Sample paths
-            sample_n = min(100, params['n'])
-            for i in range(sample_n):
-                fig.add_trace(go.Scatter(
-                    y=S_display[:, i],
-                    mode='lines',
-                    opacity=0.1,
-                    line=dict(color='blue'),
-                    showlegend=False,
-                    hoverinfo='skip'
-                ))
-            
-            # Percentiles
-            percentiles_data = np.percentile(S_display, [5, 25, 50, 75, 95], axis=1)
+                st.info(f"📊 Simulating {len(tickers)} stocks jointly")
+                mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu")
+                sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma")
+
+            # Allow optional overrides for current prices per ticker (multi-asset)
+            if len(tickers) > 1:
+                st.markdown("#### Override Current Prices (optional)")
+                price_cols = st.columns(2)
+                overridden = []
+                for i, t in enumerate(tickers):
+                    col = price_cols[i % 2]
+                    with col:
+                        val = st.number_input(f"Current Price - {t}", value=float(prices[i]), min_value=0.01, step=0.01, key=f"mc_s0_{t}")
+                        overridden.append(val)
+                prices = overridden
+
+            T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t")
+            n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims")
+
+            if st.button("Run Simulation", key="mc_run", use_container_width=True):
+                with st.spinner("Running simulations..."):
+                    if len(tickers) == 1:
+                        # single asset
+                        S = MonteCarloSimulator.simulate_prices(prices[0], mu, sigma, T, n_sims)
+                    else:
+                        # For multiple stocks, simulate correlated returns
+                        S = MonteCarloSimulator.simulate_prices_multi(prices, mu, sigma, T, n_sims)
+
+                    st.session_state['mc_S'] = S
+                    # Store params; include explicit S0 for single-asset flows
+                    params = {'tickers': tickers, 'prices': prices, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims, 'n_assets': len(tickers)}
+                    if len(tickers) == 1:
+                        params['S0'] = prices[0]
+                    st.session_state['mc_params'] = params
+
+                    st.success("✓ Complete!")
             
             fig.add_trace(go.Scatter(
                 y=percentiles_data[2, :],
