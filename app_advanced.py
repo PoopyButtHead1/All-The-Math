@@ -408,14 +408,12 @@ def monte_carlo_page():
             try:
                 portfolio_stats = MonteCarloSimulator.get_portfolio_stats(tickers, start_date, end_date)
                 expected_returns = portfolio_stats['expected_returns'].values
-                
-                # Default to portfolio-level parameters
-                mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu_multi")
-                sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma_multi")
+                individual_vols = portfolio_stats['volatilities'].values
+                cov_matrix = portfolio_stats['covariance_matrix'].values
             except:
                 expected_returns = [0.10] * len(tickers)
-                mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu_multi")
-                sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma_multi")
+                individual_vols = [0.25] * len(tickers)
+                cov_matrix = np.eye(len(tickers)) * 0.0625
             
             # Portfolio setup
             st.markdown("#### Portfolio Setup")
@@ -431,6 +429,16 @@ def monte_carlo_page():
                     s = st.number_input(f"{t} Shares", value=default_shares, min_value=0.0, step=1.0, key=f"mc_shares_{t}")
                     shares.append(s)
             
+            # Compute portfolio weights and parameters from shares
+            portfolio_values = np.array(shares) * np.array(prices)
+            weights = portfolio_values / np.sum(portfolio_values) if np.sum(portfolio_values) > 0 else np.ones(len(tickers)) / len(tickers)
+            
+            # Portfolio expected return (weighted average of expected returns)
+            mu = np.sum(weights * expected_returns)
+            
+            # Portfolio volatility (sqrt of w^T * Cov * w)
+            sigma = np.sqrt(weights @ cov_matrix @ weights.T)
+            
             # Display expected returns table
             st.markdown("#### Expected Returns")
             exp_ret_df = pd.DataFrame({
@@ -440,6 +448,14 @@ def monte_carlo_page():
                 'Volatility': [f"{v:.2%}" for v in portfolio_stats['volatilities'].values]
             })
             st.table(exp_ret_df)
+            
+            # Display computed portfolio metrics
+            st.markdown("#### Portfolio Metrics")
+            col_metrics1, col_metrics2 = st.columns(2)
+            with col_metrics1:
+                st.metric("Portfolio Expected Return", f"{mu:.2%}")
+            with col_metrics2:
+                st.metric("Portfolio Volatility", f"{sigma:.2%}")
             
             # Display correlation matrix
             with st.expander("📊 Correlation Matrix", expanded=False):
