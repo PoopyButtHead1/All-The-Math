@@ -122,6 +122,39 @@ class MonteCarloSimulator:
     """Wrapper for Monte Carlo simulations"""
     
     @staticmethod
+    def get_portfolio_stats(tickers, start_date, end_date):
+        """
+        Get historical returns, volatilities, and correlation matrix for multiple stocks
+        
+        Args:
+            tickers: List of stock tickers
+            start_date: Start date for historical data
+            end_date: End date for historical data
+        
+        Returns:
+            Dictionary with expected_returns, volatilities, correlation_matrix, covariance_matrix
+        """
+        returns_df = PortfolioOptimizer.get_portfolio_data(tickers, start_date, end_date)[2]
+        
+        # Annualized returns (mean * 252)
+        expected_returns = returns_df.mean() * 252
+        
+        # Annualized volatilities (std * sqrt(252))
+        volatilities = returns_df.std() * np.sqrt(252)
+        
+        # Correlation and covariance matrices
+        correlation_matrix = returns_df.corr()
+        covariance_matrix = returns_df.cov() * 252
+        
+        return {
+            'expected_returns': expected_returns,
+            'volatilities': volatilities,
+            'correlation_matrix': correlation_matrix,
+            'covariance_matrix': covariance_matrix,
+            'tickers': tickers
+        }
+    
+    @staticmethod
     def simulate_prices(S0, mu, sigma, T, n_sims, n_days=None):
         """
         Simulate stock prices using geometric Brownian motion

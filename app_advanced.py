@@ -394,23 +394,69 @@ def monte_carlo_page():
                 prices.append(100)
                 vols.append(0.25)
         
+        # Single vs multi-stock inputs
         if len(tickers) == 1:
             mu = st.slider("Expected Return", -0.3, 0.5, 0.10, step=0.01, key="mc_mu_single")
             sigma = st.slider("Volatility", 0.05, 1.0, float(vols[0]), step=0.05, key="mc_sigma_single")
         else:
             st.info(f"📊 Simulating {len(tickers)} stocks jointly")
-            mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu_multi")
-            sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma_multi")
             
-            st.markdown("#### Override Current Prices (optional)")
+            # Get historical data for correlation/covariance
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=1*365)
+            
+            try:
+                portfolio_stats = MonteCarloSimulator.get_portfolio_stats(tickers, start_date, end_date)
+                expected_returns = portfolio_stats['expected_returns'].values
+                
+                # Default to portfolio-level parameters
+                mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu_multi")
+                sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma_multi")
+            except:
+                expected_returns = [0.10] * len(tickers)
+                mu = st.slider("Portfolio Expected Return", -0.3, 0.5, 0.15, step=0.01, key="mc_mu_multi")
+                sigma = st.slider("Portfolio Volatility", 0.05, 1.0, 0.20, step=0.05, key="mc_sigma_multi")
+            
+            # Portfolio setup
+            st.markdown("#### Portfolio Setup")
+            initial_portfolio_value = st.number_input("Initial Portfolio Value ($)", value=100000.0, min_value=1000.0, step=1000.0, key="mc_portfolio_value")
+            
+            st.markdown("##### Number of Shares")
             price_cols = st.columns(2)
-            overridden = []
+            shares = []
             for i, t in enumerate(tickers):
                 col = price_cols[i % 2]
                 with col:
-                    val = st.number_input(f"Current Price - {t}", value=float(prices[i]), min_value=0.01, step=0.01, key=f"mc_s0_{t}")
-                    overridden.append(val)
-            prices = overridden
+                    default_shares = initial_portfolio_value / (len(tickers) * prices[i])
+                    s = st.number_input(f"{t} Shares", value=default_shares, min_value=0.0, step=1.0, key=f"mc_shares_{t}")
+                    shares.append(s)
+            
+            # Display expected returns table
+            st.markdown("#### Expected Returns")
+            exp_ret_df = pd.DataFrame({
+                'Stock': tickers,
+                'Expected Return': [f"{r:.2%}" for r in expected_returns],
+                'Current Price': [f"${p:.2f}" for p in prices],
+                'Volatility': [f"{v:.2%}" for v in portfolio_stats['volatilities'].values]
+            })
+            st.table(exp_ret_df)
+            
+            # Display correlation matrix
+            with st.expander("📊 Correlation Matrix", expanded=False):
+                st.write(portfolio_stats['correlation_matrix'].round(3))
+            
+            # Display covariance matrix
+            with st.expander("📊 Covariance Matrix", expanded=False):
+                st.write(portfolio_stats['covariance_matrix'].round(5))
+            
+            # Rebalancing rule
+            st.markdown("#### Rebalancing")
+            rebalancing_rule = st.radio(
+                "Rebalancing Frequency",
+                ["No Rebalancing", "Daily", "Weekly", "Monthly"],
+                key="mc_rebalancing",
+                horizontal=True
+            )
             
         T = st.number_input("Time Horizon (years)", value=1.0, min_value=0.01, max_value=10.0, step=0.1, key="mc_t_input")
         n_sims = st.slider("Number of Simulations", 100, 10000, 1000, step=100, key="mc_sims_slider")
@@ -420,12 +466,17 @@ def monte_carlo_page():
                 if len(tickers) == 1:
                     S = MonteCarloSimulator.simulate_prices(prices[0], mu, sigma, T, n_sims)
                 else:
-                    S = MonteCarloSimulator.simulate_prices_multi(prices, mu, sigma, T, n_sims)
+                    S = MonteCarloSimulator.simulate_prices_multi(prices, mu, sigma, T, n_sims, 
+                                                                   correlation_matrix=portfolio_stats['correlation_matrix'].values)
 
                 st.session_state['mc_S'] = S
                 params = {'tickers': tickers, 'prices': prices, 'mu': mu, 'sigma': sigma, 'T': T, 'n': n_sims, 'n_assets': len(tickers)}
                 if len(tickers) == 1:
                     params['S0'] = prices[0]
+                else:
+                    params['shares'] = shares
+                    params['initial_portfolio_value'] = initial_portfolio_value
+                    params['rebalancing_rule'] = rebalancing_rule if len(tickers) > 1 else "N/A"
                 st.session_state['mc_params'] = params
                 st.success("✓ Complete!")
     
@@ -542,19 +593,14 @@ def backtest_page():
         stocks = [s.strip().upper() for s in stocks_text.split('\n') if s.strip()]
         
         if len(stocks) > 0:
-            st.markdown("### Weights (%)")
-            weights = []
-            default_w = 100 / len(stocks)
+            st.markdown("### Number of Shares")
+            shares = []
             
             cols = st.columns(len(stocks))
             for stock, col in zip(stocks, cols):
                 with col:
-                    w = st.number_input(f"{stock}", 0.0, 100.0, default_w, step=5.0, key=f"bt_w_{stock}")
-                    weights.append(w)
-            
-            # Normalize
-            total = sum(weights)
-            weights = [w / total for w in weights] if total > 0 else [1/len(stocks)] * len(stocks)
+                    s = st.number_input(f"{stock} Shares", value=10.0, min_value=0.0, step=1.0, key=f"bt_shares_{stock}")
+                    shares.append(s)
         
         # Backtest period with date inputs
         st.markdown("### Date Range")
