@@ -504,86 +504,154 @@ def monte_carlo_page():
             if len(S.shape) == 2:
                 is_multi = False
                 S_display = S
+                portfolio_values = S
             else:
                 is_multi = True
                 S_display = S[:, :, 0]
+                # Compute portfolio values from shares and asset prices
+                shares = np.array(params['shares']).reshape(1, -1)
+                S_all = S  # shape: (time_steps, n_sims, n_assets)
+                portfolio_values = np.sum(S_all * shares, axis=2)  # shape: (time_steps, n_sims)
+            
+            # Create fan chart for portfolio values
+            percentiles_data = np.percentile(portfolio_values, [5, 50, 95], axis=1)
             
             fig = go.Figure()
-            sample_n = min(100, params['n'])
-            for i in range(sample_n):
-                fig.add_trace(go.Scatter(
-                    y=S_display[:, i],
-                    mode='lines',
-                    opacity=0.1,
-                    line=dict(color='blue'),
-                    showlegend=False,
-                    hoverinfo='skip'
-                ))
             
-            percentiles_data = np.percentile(S_display, [5, 25, 50, 75, 95], axis=1)
-            
+            # Add shaded region between 5th and 95th percentiles
             fig.add_trace(go.Scatter(
                 y=percentiles_data[2, :],
-                name='Median',
-                line=dict(color='red', width=3)
+                fill=None,
+                mode='lines',
+                line_color='rgba(0, 0, 0, 0)',
+                showlegend=False,
+                name='95th %ile',
+                hoverinfo='skip'
+            ))
+            fig.add_trace(go.Scatter(
+                y=percentiles_data[0, :],
+                fill='tonexty',
+                mode='lines',
+                line_color='rgba(0, 0, 0, 0)',
+                name='5th-95th %ile Band',
+                fillcolor='rgba(0, 100, 200, 0.2)',
+                hoverinfo='skip'
+            ))
+            
+            # Add median line
+            fig.add_trace(go.Scatter(
+                y=percentiles_data[1, :],
+                name='Median (50th %ile)',
+                line=dict(color='rgb(0, 0, 200)', width=3),
+                hovertemplate='Day %{x}<br>Portfolio Value: $%{y:,.0f}<extra></extra>'
+            ))
+            
+            # Add 5th and 95th percentile lines
+            fig.add_trace(go.Scatter(
+                y=percentiles_data[2, :],
+                name='95th %ile',
+                line=dict(color='rgb(200, 100, 0)', dash='dash', width=2),
+                hovertemplate='Day %{x}<br>Portfolio Value: $%{y:,.0f}<extra></extra>'
             ))
             fig.add_trace(go.Scatter(
                 y=percentiles_data[0, :],
                 name='5th %ile',
-                line=dict(color='orange', dash='dash')
-            ))
-            fig.add_trace(go.Scatter(
-                y=percentiles_data[4, :],
-                name='95th %ile',
-                line=dict(color='orange', dash='dash')
+                line=dict(color='rgb(200, 100, 0)', dash='dash', width=2),
+                hovertemplate='Day %{x}<br>Portfolio Value: $%{y:,.0f}<extra></extra>'
             ))
             
-            title = f"{params['tickers'][0]} (Portfolio)" if is_multi else params['tickers'][0]
-            title += f" - {params['n']:,} Simulation Paths"
+            title = "Portfolio Value - Simulation Paths" if is_multi else params['tickers'][0]
+            title += f"\n{params['n']:,} Simulations"
             
             fig.update_layout(
                 title=title,
                 xaxis_title="Trading Days",
-                yaxis_title="Price ($)",
-                height=600
+                yaxis_title="Portfolio Value ($)" if is_multi else "Price ($)",
+                height=600,
+                hovermode='x unified'
             )
             
             st.plotly_chart(fig, use_container_width=True)
             
-            st.markdown("### Terminal Price Distribution")
-            final_prices = S_display[-1, :]
+            # Individual stock paths in collapsed section (only for multi-stock)
+            if is_multi:
+                with st.expander("📈 Individual Stock Paths", expanded=False):
+                    for asset_idx, ticker in enumerate(params['tickers']):
+                        stock_prices = S[:, :, asset_idx]
+                        
+                        fig_stock = go.Figure()
+                        sample_n = min(100, params['n'])
+                        for i in range(sample_n):
+                            fig_stock.add_trace(go.Scatter(
+                                y=stock_prices[:, i],
+                                mode='lines',
+                                opacity=0.1,
+                                line=dict(color='blue'),
+                                showlegend=False,
+                                hoverinfo='skip'
+                            ))
+                        
+                        stock_percentiles = np.percentile(stock_prices, [5, 50, 95], axis=1)
+                        
+                        fig_stock.add_trace(go.Scatter(
+                            y=stock_percentiles[1, :],
+                            name='Median',
+                            line=dict(color='red', width=2)
+                        ))
+                        fig_stock.add_trace(go.Scatter(
+                            y=stock_percentiles[0, :],
+                            name='5th %ile',
+                            line=dict(color='orange', dash='dash')
+                        ))
+                        fig_stock.add_trace(go.Scatter(
+                            y=stock_percentiles[2, :],
+                            name='95th %ile',
+                            line=dict(color='orange', dash='dash')
+                        ))
+                        
+                        fig_stock.update_layout(
+                            title=f"{ticker} - {sample_n} Sample Paths",
+                            xaxis_title="Trading Days",
+                            yaxis_title="Price ($)",
+                            height=400
+                        )
+                        
+                        st.plotly_chart(fig_stock, use_container_width=True)
+            
+            st.markdown("### Terminal Portfolio Value Distribution" if is_multi else "### Terminal Price Distribution")
+            final_values = portfolio_values[-1, :]
             
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             with col_f1:
-                st.metric("Expected", f"${final_prices.mean():.2f}")
+                st.metric("Expected", f"${final_values.mean():,.2f}")
             with col_f2:
-                st.metric("Std Dev", f"${final_prices.std():.2f}")
+                st.metric("Std Dev", f"${final_values.std():,.2f}")
             with col_f3:
-                st.metric("Min", f"${final_prices.min():.2f}")
+                st.metric("Min", f"${final_values.min():,.2f}")
             with col_f4:
-                st.metric("Max", f"${final_prices.max():.2f}")
+                st.metric("Max", f"${final_values.max():,.2f}")
             
             st.markdown("### Risk Analysis")
             col_r1, col_r2, col_r3 = st.columns(3)
             with col_r1:
-                var_95 = MonteCarloSimulator.calculate_var(final_prices, 0.95)
-                st.metric("VaR (95%)", f"${var_95:.2f}")
+                var_95 = MonteCarloSimulator.calculate_var(final_values, 0.95)
+                st.metric("VaR (95%)", f"${var_95:,.2f}")
             with col_r2:
-                cvar_95 = MonteCarloSimulator.calculate_cvar(final_prices, 0.95)
-                st.metric("CVaR (95%)", f"${cvar_95:.2f}")
+                cvar_95 = MonteCarloSimulator.calculate_cvar(final_values, 0.95)
+                st.metric("CVaR (95%)", f"${cvar_95:,.2f}")
             with col_r3:
-                baseline_price = params.get('S0') if params.get('S0') is not None else (params.get('prices', [None])[0] if params.get('prices') else None)
-                if baseline_price is None:
+                baseline_value = params.get('initial_portfolio_value') if is_multi else (params.get('S0') if params.get('S0') is not None else (params.get('prices', [None])[0] if params.get('prices') else None))
+                if baseline_value is None:
                     st.metric("Prob(Loss)", "N/A")
                 else:
-                    prob_loss = (final_prices < baseline_price).sum() / len(final_prices)
+                    prob_loss = (final_values < baseline_value).sum() / len(final_values)
                     st.metric("Prob(Loss)", f"{prob_loss:.2%}")
             
             fig_hist = px.histogram(
-                x=final_prices,
+                x=final_values,
                 nbins=50,
-                title="Final Price Distribution",
-                labels={'x': 'Final Price ($)', 'count': 'Frequency'}
+                title="Terminal Portfolio Value Distribution" if is_multi else "Final Price Distribution",
+                labels={'x': 'Portfolio Value ($)' if is_multi else 'Final Price ($)', 'count': 'Frequency'}
             )
             fig_hist.update_layout(height=400, showlegend=False)
             st.plotly_chart(fig_hist, use_container_width=True)
